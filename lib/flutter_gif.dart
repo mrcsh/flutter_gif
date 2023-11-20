@@ -10,6 +10,7 @@ import 'dart:io';
 import 'dart:ui' as ui show Codec;
 import 'dart:ui';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
@@ -221,13 +222,12 @@ HttpClient get _httpClient {
 Future<List<ImageInfo>> fetchGif(ImageProvider provider) async {
   List<ImageInfo> infos = [];
   final Uint8List bytes;
-  final String key = provider is NetworkImage
-      ? provider.url
-      : provider is AssetImage
-          ? provider.assetName
-          : provider is MemoryImage
-              ? provider.bytes.toString()
-              : "";
+  final String key = switch (provider) {
+    final NetworkImage ni => ni.url,
+    final AssetImage ai => ai.assetName,
+    final MemoryImage mi => md5.convert(mi.bytes).toString(),
+    _ => '',
+  };
 
   if (GifImage.cache.caches.containsKey(key)) {
     infos = GifImage.cache.caches[key]!;
@@ -245,8 +245,7 @@ Future<List<ImageInfo>> fetchGif(ImageProvider provider) async {
       response,
     );
   } else if (provider is AssetImage) {
-    AssetBundleImageKey key =
-        await provider.obtainKey(const ImageConfiguration());
+    AssetBundleImageKey key = await provider.obtainKey(const ImageConfiguration());
     bytes = (await key.bundle.load(key.name)).buffer.asUint8List();
   } else if (provider is FileImage) {
     bytes = await provider.file.readAsBytes();
@@ -257,8 +256,7 @@ Future<List<ImageInfo>> fetchGif(ImageProvider provider) async {
   }
 
   final buffer = await ImmutableBuffer.fromUint8List(bytes);
-  ui.Codec codec =
-      await PaintingBinding.instance.instantiateImageCodecFromBuffer(buffer);
+  ui.Codec codec = await PaintingBinding.instance.instantiateImageCodecWithSize(buffer);
   for (int i = 0; i < codec.frameCount; i++) {
     final frameInfo = await codec.getNextFrame();
     final duration = frameInfo.duration.inSeconds;
